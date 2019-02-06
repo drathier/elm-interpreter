@@ -4,13 +4,14 @@ import Dict exposing (Dict)
 import Interpreter.Debug as IDebug
 import Interpreter.Helpers exposing (..)
 import Interpreter.Types exposing (..)
+import Maybe.Extra
 import Set exposing (Set)
 
 
 patternMatch : Env -> Pattern -> Expr -> Maybe Env
 patternMatch env pat expr =
     case ( pat, expr ) of
-        ( PAnything, e ) ->
+        ( PAnything, _ ) ->
             Just env
 
         ( PVar pvarName, e ) ->
@@ -21,13 +22,11 @@ patternMatch env pat expr =
                 Nothing
 
             else
-                let
-                    matches =
-                        List.map2 (patternMatch env) pats exprs
-                in
-                sequenceMaybe matches |> Maybe.map (List.foldl Dict.union env)
+                List.map2 (patternMatch env) pats exprs
+                    |> Maybe.Extra.combine
+                    |> Maybe.map (List.foldl Dict.union env)
 
-        ( PInt a, Value b ) ->
+        ( PInt a, VInt b ) ->
             if a == b then
                 Just env
 
@@ -44,7 +43,12 @@ patternMatch env pat expr =
                         Nothing ->
                             Nothing
             in
-            case Set.toList keys |> List.map (\k -> ( k, Dict.get k body )) |> List.map liftSecondMaybe |> sequenceMaybe of
+            case
+                Set.toList keys
+                    |> List.map (\k -> ( k, Dict.get k body ))
+                    |> List.map liftSecondMaybe
+                    |> Maybe.Extra.combine
+            of
                 Just v ->
                     Just <| Dict.union (Dict.fromList v) env
 
@@ -58,17 +62,11 @@ patternMatch env pat expr =
 interpret : Dict Name Expr -> Expr -> Expr
 interpret environment expr =
     case expr of
-        Value v ->
-            Value v
+        VInt v ->
+            VInt v
 
-        BinOp e1 Add e2 ->
-            apply2Ints (interpret environment e1) (+) (interpret environment e2)
-
-        BinOp e1 Mul e2 ->
-            apply2Ints (interpret environment e1) (*) (interpret environment e2)
-
-        BinOp e1 Sub e2 ->
-            apply2Ints (interpret environment e1) (-) (interpret environment e2)
+        BinOp e1 op e2 ->
+            binop (interpret environment e1) op (interpret environment e2)
 
         Variable var ->
             case Dict.get var environment of
@@ -123,23 +121,23 @@ interpret environment expr =
                     Debug.todo "type mismatch; the type checker should've forbidden this"
 
         Case e [] ->
-            Debug.todo "exhaustiveness failure; didn't find a matching pattern"
+            Debug.todo ("exhaustiveness failure; didn't find a matching pattern for expr " ++ Debug.toString e)
 
-        Case e (( pat, caseBody ) :: patExprs) ->
+        Case e (( pat, caseBody ) :: otherCases) ->
             case patternMatch environment pat (interpret environment e) of
                 Just newEnv ->
                     interpret newEnv caseBody
 
                 Nothing ->
-                    interpret environment (Case e patExprs)
+                    interpret environment (Case e otherCases)
 
         Record body ->
             Record body
 
         Negate e ->
             case interpret environment e of
-                Value i ->
-                    Value -i
+                VInt i ->
+                    VInt -i
 
                 nonValueExpr ->
                     Negate nonValueExpr

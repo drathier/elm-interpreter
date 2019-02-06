@@ -4,7 +4,7 @@ import Dict exposing (Dict)
 import Set exposing (Set)
 
 type alias Env =
-    Dict String Expr
+    Dict Name Expr
 
 
 type Op
@@ -18,7 +18,7 @@ type alias Name =
 
 
 type Expr
-    = Value Int
+    = VInt Int
     | BinOp Expr Op Expr
     | Variable Name
     | Let (Dict Name Expr) Expr

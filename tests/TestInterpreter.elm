@@ -2,10 +2,8 @@ module TestInterpreter exposing (basics, closures, letExpressions, mutuallyRecur
 
 import Dict exposing (Dict)
 import Expect exposing (Expectation)
-import Fuzz exposing (Fuzzer, int, intRange, list, string)
+import Fuzz exposing (Fuzzer, int, intRange, string)
 import Interpreter exposing (..)
-import Interpreter.Debug as IDebug
-import Interpreter.Helpers exposing (..)
 import Interpreter.Types exposing (..)
 import Test exposing (..)
 
@@ -14,33 +12,28 @@ basics : Test
 basics =
     describe "simple values"
         [ fuzz int "value returns self without crashing" <|
-            \i -> interpret Dict.empty (Value i) |> Expect.equal (Value i)
+            \i -> interpret Dict.empty (VInt i) |> Expect.equal (VInt i)
         , fuzz int "variable is dereferenced" <|
-            \i -> interpret (Dict.singleton "x" (Value i)) (Variable "x") |> Expect.equal (Value i)
+            \i -> interpret (Dict.singleton "x" (VInt i)) (Variable "x") |> Expect.equal (VInt i)
         , fuzz2 int int "simple Add expression" <|
-            \a b -> interpret Dict.empty (BinOp (Value a) Add (Value b)) |> Expect.equal (Value (a + b))
+            \a b -> interpret Dict.empty (BinOp (VInt a) Add (VInt b)) |> Expect.equal (VInt (a + b))
         , fuzz2 int int "simple Mul expression" <|
-            \a b -> interpret Dict.empty (BinOp (Value a) Mul (Value b)) |> Expect.equal (Value (a * b))
+            \a b -> interpret Dict.empty (BinOp (VInt a) Mul (VInt b)) |> Expect.equal (VInt (a * b))
         , fuzz3 int int string "function application" <|
             \a b varname ->
                 Apply
-                    (Function (PVar varname) (BinOp (Variable varname) Mul (Value b)))
-                    (Value a)
+                    (Function (PVar varname) (BinOp (Variable varname) Mul (VInt b)))
+                    (VInt a)
                     |> interpret Dict.empty
-                    |> Expect.equal (Value (a * b))
+                    |> Expect.equal (VInt (a * b))
         , fuzz2 int string "case on Maybe" <|
             \i varName ->
-                let
-                    nothing =
-                        Ctor "Nothing" []
-
-                    just v =
-                        Ctor "Just" [ v ]
-
-                    caseExpr =
-                        Case (just (Value i)) [ ( PCtor "Nothing" [], Value 42 ), ( PCtor "Just" [ PVar varName ], Variable varName ) ]
-                in
-                interpret Dict.empty caseExpr |> Expect.equal (Value i)
+                Case (Ctor "Just" [ VInt i ])
+                    [ ( PCtor "Nothing" [], VInt 42 )
+                    , ( PCtor "Just" [ PVar varName ], Variable varName )
+                    ]
+                    |> interpret Dict.empty
+                    |> Expect.equal (VInt i)
         ]
 
 
@@ -51,39 +44,40 @@ patterns =
             \() ->
                 let
                     appl arg =
-                        Apply (Function PAnything (Value 3)) arg
+                        Apply (Function PAnything (VInt 3)) arg
                 in
-                interpret Dict.empty (appl (Value 42))
+                interpret Dict.empty (appl (VInt 42))
                     |> Expect.equal
                         (interpret Dict.empty (appl (Ctor "ctorName" [])))
         , test "int pattern accepts ints" <|
             \() ->
-                interpret Dict.empty (Apply (Function (PInt 5) (Value 3)) (Value 5))
-                    |> Expect.equal (Value 3)
+                interpret Dict.empty (Apply (Function (PInt 5) (VInt 3)) (VInt 5))
+                    |> Expect.equal (VInt 3)
         , fuzz3 int int string "variable pattern accepts anything, and binds that variable" <|
             \a b varname ->
                 Apply
-                    (Function (PVar varname) (BinOp (Variable varname) Mul (Value b)))
-                    (Value a)
+                    (Function (PVar varname) (BinOp (Variable varname) Mul (VInt b)))
+                    (VInt a)
                     |> interpret Dict.empty
-                    |> Expect.equal (Value (a * b))
+                    |> Expect.equal (VInt (a * b))
         , fuzz3 int int string "ctor pattern binds the ctor arguments" <|
             \a b varname ->
                 Apply
-                    (Function (PVar varname) (BinOp (Variable varname) Mul (Value b)))
-                    (Value a)
+                    (Function (PVar varname) (BinOp (Variable varname) Mul (VInt b)))
+                    (VInt a)
                     |> interpret Dict.empty
-                    |> Expect.equal (Value (a * b))
+                    |> Expect.equal (VInt (a * b))
         ]
 
 
+letExpressions : Test
 letExpressions =
     describe "let-expressions"
         [ test "empty let-expressions (which are illegal Elm) are equal to their bodies" <|
             \() ->
                 let
                     fn =
-                        Lambda (Dict.singleton "testvariable" (Value 4711)) PAnything (Value 11147)
+                        Lambda (Dict.singleton "testvariable" (VInt 4711)) PAnything (VInt 11147)
 
                     env =
                         Dict.singleton "testenv" (Ctor "Nada" [])
@@ -95,7 +89,7 @@ letExpressions =
                     env =
                         Dict.singleton "testenv" (Ctor "Nada" [])
                 in
-                interpret env (Let (Dict.singleton varname (Value 42)) (Variable varname)) |> Expect.equal (Value 42)
+                interpret env (Let (Dict.singleton varname (VInt 42)) (Variable varname)) |> Expect.equal (VInt 42)
         , test "let-expressions can reference each other non-recursively" <|
             \_ ->
                 let
@@ -104,12 +98,12 @@ letExpressions =
 
                     letBody =
                         Dict.fromList
-                            [ ( "a", Value 3 )
+                            [ ( "a", VInt 3 )
                             , ( "c", Variable "a" )
                             , ( "b", Variable "c" )
                             ]
                 in
-                interpret env (Let letBody (BinOp (Variable "c") Mul (Variable "b"))) |> Expect.equal (Value (3 * 3))
+                interpret env (Let letBody (BinOp (Variable "c") Mul (Variable "b"))) |> Expect.equal (VInt (3 * 3))
         ]
 
 
@@ -122,7 +116,7 @@ nestedFunctions =
                     always =
                         Function (PVar "a") (Function (PVar "b") (Variable "a"))
                 in
-                interpret Dict.empty (Apply (Apply always (Value 3)) (Value 4)) |> Expect.equal (Value 3)
+                interpret Dict.empty (Apply (Apply always (VInt 3)) (VInt 4)) |> Expect.equal (VInt 3)
         ]
 
 
@@ -144,14 +138,14 @@ recursiveFunctions =
                             [ ( "fact"
                               , Function (PVar "x")
                                     (Case (Variable "x")
-                                        [ ( PInt 0, Value 1 )
-                                        , ( PAnything, BinOp (Variable "x") Mul (Apply (Variable "fact") (BinOp (Variable "x") Sub (Value 1))) )
+                                        [ ( PInt 0, VInt 1 )
+                                        , ( PAnything, BinOp (Variable "x") Mul (Apply (Variable "fact") (BinOp (Variable "x") Sub (VInt 1))) )
                                         ]
                                     )
                               )
                             ]
                 in
-                interpret Dict.empty (Let letBody (Apply (Variable "fact") (Value i))) |> Expect.equal (Value (fact i))
+                interpret Dict.empty (Let letBody (Apply (Variable "fact") (VInt i))) |> Expect.equal (VInt (fact i))
         , fuzz2 (Fuzz.intRange 0 3) (Fuzz.intRange 0 4) "Ackermann" <|
             \x y ->
                 let
@@ -169,7 +163,7 @@ recursiveFunctions =
                         Apply (Apply (Variable "ackermann") a) b
 
                     dec a =
-                        BinOp a Sub (Value 1)
+                        BinOp a Sub (VInt 1)
 
                     letBody =
                         Dict.fromList
@@ -177,10 +171,10 @@ recursiveFunctions =
                               , Function (PVar "m") <|
                                     Function (PVar "n") <|
                                         Case (Variable "m")
-                                            [ ( PInt 0, BinOp (Variable "n") Add (Value 1) )
+                                            [ ( PInt 0, BinOp (Variable "n") Add (VInt 1) )
                                             , ( PAnything
                                               , Case (Variable "n")
-                                                    [ ( PInt 0, rec (dec (Variable "m")) (Value 1) )
+                                                    [ ( PInt 0, rec (dec (Variable "m")) (VInt 1) )
                                                     , ( PAnything, rec (dec (Variable "m")) (rec (Variable "m") (dec (Variable "n"))) )
                                                     ]
                                               )
@@ -188,7 +182,7 @@ recursiveFunctions =
                               )
                             ]
                 in
-                interpret Dict.empty (Let letBody (Apply (Apply (Variable "ackermann") (Value x)) (Value y))) |> Expect.equal (Value (ackermann x y))
+                interpret Dict.empty (Let letBody (Apply (Apply (Variable "ackermann") (VInt x)) (VInt y))) |> Expect.equal (VInt (ackermann x y))
         ]
 
 
@@ -220,7 +214,7 @@ mutuallyRecursiveFunctions =
                               , Function (PVar "xev")
                                     (Case (Variable "xev")
                                         [ ( PInt 0, Ctor "True" [] )
-                                        , ( PAnything, Apply (Variable "odd") (BinOp (Variable "xev") Sub (Value 1)) )
+                                        , ( PAnything, Apply (Variable "odd") (BinOp (Variable "xev") Sub (VInt 1)) )
                                         ]
                                     )
                               )
@@ -228,13 +222,13 @@ mutuallyRecursiveFunctions =
                               , Function (PVar "xdd")
                                     (Case (Variable "xdd")
                                         [ ( PInt 0, Ctor "False" [] )
-                                        , ( PAnything, Apply (Variable "even") (BinOp (Variable "xdd") Sub (Value 1)) )
+                                        , ( PAnything, Apply (Variable "even") (BinOp (Variable "xdd") Sub (VInt 1)) )
                                         ]
                                     )
                               )
                             ]
                 in
-                interpret Dict.empty (Let letBody (Apply (Variable "odd") (Value i))) |> Expect.equal (isOdd i)
+                interpret Dict.empty (Let letBody (Apply (Variable "odd") (VInt i))) |> Expect.equal (isOdd i)
         , fuzz (intRange 0 30) "mutrec fact" <|
             \i ->
                 let
@@ -250,18 +244,19 @@ mutuallyRecursiveFunctions =
                             [ ( "fact"
                               , Function (PVar "x")
                                     (Case (Variable "x")
-                                        [ ( PInt 0, Value 1 )
-                                        , ( PAnything, BinOp (Variable "x") Mul (Apply (Variable "fact") (BinOp (Apply (Variable "identity") (Variable "x")) Sub (Value 1))) )
+                                        [ ( PInt 0, VInt 1 )
+                                        , ( PAnything, BinOp (Variable "x") Mul (Apply (Variable "fact") (BinOp (Apply (Variable "identity") (Variable "x")) Sub (VInt 1))) )
                                         ]
                                     )
                               )
                             , ( "identity", Function (PVar "x") (Variable "x") )
                             ]
                 in
-                interpret Dict.empty (Let letBody (Apply (Variable "fact") (Value i))) |> Expect.equal (Value (fact i))
+                interpret Dict.empty (Let letBody (Apply (Variable "fact") (VInt i))) |> Expect.equal (VInt (fact i))
         ]
 
 
+closures : Test
 closures =
     describe "closures"
         [ test "closure" <|
@@ -272,16 +267,16 @@ closures =
                             [ ( "closure"
                               , Let
                                     (Dict.fromList
-                                        [ ( "innerValue", Value 3 )
+                                        [ ( "innerValue", VInt 3 )
                                         , ( "retFn", Function (PInt 5) (Variable "innerValue") )
                                         ]
                                     )
                                     (Variable "retFn")
                               )
-                            , ( "innerValue", Value 9 )
+                            , ( "innerValue", VInt 9 )
                             ]
                 in
-                interpret (Dict.singleton "innerValue" (Value 1)) (Let letBody (Apply (Variable "closure") (Value 5))) |> Expect.equal (Value 3)
+                interpret (Dict.singleton "innerValue" (VInt 1)) (Let letBody (Apply (Variable "closure") (VInt 5))) |> Expect.equal (VInt 3)
         , test "closure2" <|
             \() ->
                 -- test uses name shadowing to figure out where a closure fails, if it fails, even though elm doesn't allow shadowing
@@ -306,15 +301,15 @@ closures =
                                                 )
                                                 (Variable "innerLet")
                                           )
-                                        , ( "innerValue", Value 3 )
+                                        , ( "innerValue", VInt 3 )
                                         ]
                                     )
                                     (Variable "middle")
                               )
-                            , ( "innerValue", Value 9 )
+                            , ( "innerValue", VInt 9 )
                             ]
                 in
-                interpret (Dict.singleton "innerValue" (Value 1)) (Let letBody (Apply (Variable "closure") (Value 5))) |> Expect.equal (Value 3)
+                interpret (Dict.singleton "innerValue" (VInt 1)) (Let letBody (Apply (Variable "closure") (VInt 5))) |> Expect.equal (VInt 3)
         , test "faked closure" <|
             \() ->
                 let
@@ -323,14 +318,14 @@ closures =
                             [ ( "closure"
                               , Let
                                     (Dict.fromList
-                                        [ ( "innerValue", Value 3 )
-                                        , ( "retFn", Lambda (Dict.singleton "innerValue" (Value 3)) (PInt 5) (Variable "innerValue") )
+                                        [ ( "innerValue", VInt 3 )
+                                        , ( "retFn", Lambda (Dict.singleton "innerValue" (VInt 3)) (PInt 5) (Variable "innerValue") )
                                         ]
                                     )
                                     (Variable "retFn")
                               )
-                            , ( "innerValue", Value 9 )
+                            , ( "innerValue", VInt 9 )
                             ]
                 in
-                interpret (Dict.singleton "innerValue" (Value 1)) (Let letBody (Apply (Variable "closure") (Value 5))) |> Expect.equal (Value 3)
+                interpret (Dict.singleton "innerValue" (VInt 1)) (Let letBody (Apply (Variable "closure") (VInt 5))) |> Expect.equal (VInt 3)
         ]

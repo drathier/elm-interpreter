@@ -1,9 +1,9 @@
 module Interpreter.Debug exposing (inTrace, outTrace, printEnv, showExpr)
 
 import Dict exposing (Dict)
-import Set exposing (Set)
-
 import Interpreter.Types exposing (..)
+
+
 
 -- Mutual recursion (LetRec)
 
