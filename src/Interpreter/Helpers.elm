@@ -6,11 +6,11 @@ import Interpreter.Types exposing (..)
 binop : Expr -> Op -> Expr -> Expr
 binop first op second =
     case ( first, op, second ) of
-        ( VInt a, Add, VInt b ) -> VInt (a + b)
-        ( VInt a, Sub, VInt b ) -> VInt (a - b)
-        ( VInt a, Mul, VInt b ) -> VInt (a * b)
+        ( EInt a, OpAdd, EInt b ) -> EInt (a + b)
+        ( EInt a, OpSub, EInt b ) -> EInt (a - b)
+        ( EInt a, OpMul, EInt b ) -> EInt (a * b)
         _ ->
-            Debug.todo <| "type mismatch; expected two `VInt` Expr, got " ++ Debug.toString ( first, op, second )
+            Debug.todo <| "type mismatch; expected two `EInt` Expr, got " ++ Debug.toString ( first, op, second )
 
 
 

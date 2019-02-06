@@ -5,7 +5,7 @@ import Interpreter.Types exposing (..)
 
 
 
--- Mutual recursion (LetRec)
+-- Mutual recursion (ELetRec)
 
 
 inTrace a =
@@ -26,10 +26,10 @@ outTrace a =
 
 showExpr e =
     case e of
-        --Lambda _ pats body ->
-        --    "Lambda <env> (" ++ Debug.toString pats ++ ") (" ++ Debug.toString body ++ ")"
-        Lambda env pats body ->
-            "Lambda (>>\n" ++ printEnv env ++ "\n>>) (" ++ Debug.toString pats ++ ") (" ++ Debug.toString body ++ ")"
+        --ELambda _ pats body ->
+        --    "ELambda <env> (" ++ Debug.toString pats ++ ") (" ++ Debug.toString body ++ ")"
+        ELambda env pats body ->
+            "ELambda (>>\n" ++ printEnv env ++ "\n>>) (" ++ Debug.toString pats ++ ") (" ++ Debug.toString body ++ ")"
 
         _ ->
             Debug.toString e

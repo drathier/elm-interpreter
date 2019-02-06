@@ -1,30 +1,30 @@
-module Talk.OBinopAdd exposing (Expr(..), Op(..), binop, interpret)
+module Talk.OBinopOpAdd exposing (Expr(..), Op(..), binop, interpret)
 
 
 type Op
-    = Add
+    = OpAdd
 
 
 type Expr
-    = VInt Int
-    | BinOp Expr Op Expr
+    = EInt Int
+    | EBinOp Expr Op Expr
 
 
 interpret : Expr -> Expr
 interpret expr =
     case expr of
-        VInt v ->
-            VInt v
+        EInt v ->
+            EInt v
 
-        BinOp e1 op e2 ->
+        EBinOp e1 op e2 ->
             binop (interpret e1) op (interpret e2)
 
 
 binop : Expr -> Op -> Expr -> Expr
 binop first op second =
     case ( first, op, second ) of
-        ( VInt a, Add, VInt b ) ->
-            VInt (a + b)
+        ( EInt a, OpAdd, EInt b ) ->
+            EInt (a + b)
 
         _ ->
-            Debug.todo <| "type mismatch; expected two `VInt` Expr, got " ++ Debug.toString ( first, op, second )
+            Debug.todo <| "type mismatch; expected two `EInt` Expr, got " ++ Debug.toString ( first, op, second )

@@ -1,4 +1,4 @@
-module Talk.ERecord exposing (Env, Expr(..), Name, Op(..), Pattern(..), binop, interpret, patternMatch, unwrapMaybe)
+module Talk.EERecord exposing (Env, Expr(..), Name, Op(..), Pattern(..), binop, interpret, patternMatch, unwrapMaybe)
 
 import Dict exposing (Dict)
 import Maybe.Extra
@@ -14,9 +14,9 @@ type alias Env =
 
 
 type Op
-    = Add
-    | Mul
-    | Sub
+    = OpAdd
+    | OpMul
+    | OpSub
 
 
 type alias Name =
@@ -24,35 +24,35 @@ type alias Name =
 
 
 type Expr
-    = VInt Int
-    | BinOp Expr Op Expr
-    | Variable Name
-    | Let ( Name, Expr ) Expr
-    | Function Pattern Expr
-    | Apply Expr Expr -- fn arg
-    | Ctor Name (List Expr)
-    | Case Expr (List ( Pattern, Expr ))
-    | Record (Dict Name Expr)
+    = EInt Int
+    | EBinOp Expr Op Expr
+    | EVariable Name
+    | ELet ( Name, Expr ) Expr
+    | EFunction Pattern Expr
+    | EApply Expr Expr -- fn arg
+    | ECtor Name (List Expr)
+    | ECase Expr (List ( Pattern, Expr ))
+    | ERecord (Dict Name Expr)
 
 
 type Pattern
     = PAnything
     | PVar Name
     | PInt Int
-    | PCtor Name (List Pattern)
-    | PRecord (Set Name)
+    | PECtor Name (List Pattern)
+    | PERecord (Set Name)
 
 
 interpret : Dict Name Expr -> Expr -> Expr
 interpret environment expr =
     case expr of
-        VInt v ->
-            VInt v
+        EInt v ->
+            EInt v
 
-        BinOp e1 op e2 ->
+        EBinOp e1 op e2 ->
             binop (interpret environment e1) op (interpret environment e2)
 
-        Variable var ->
+        EVariable var ->
             case Dict.get var environment of
                 Just varExpr ->
                     interpret environment varExpr
@@ -60,47 +60,47 @@ interpret environment expr =
                 Nothing ->
                     Debug.todo ("unknown variable" ++ Debug.toString var ++ " in env \n" ++ Debug.toString environment)
 
-        Let ( varName, varBody ) body ->
+        ELet ( varName, varBody ) body ->
             let
-                envWithLetBindings =
+                envWithELetBindings =
                     Dict.insert varName varBody environment
             in
-            interpret envWithLetBindings body
+            interpret envWithELetBindings body
 
-        Ctor name args ->
-            Ctor name args
+        ECtor name args ->
+            ECtor name args
 
-        Function argPat lambdaBody ->
-            Function argPat lambdaBody
+        EFunction argPat lambdaBody ->
+            EFunction argPat lambdaBody
 
-        Apply fn argument ->
+        EApply fn argument ->
             case interpret environment fn of
-                Function argPat lambdaBody ->
+                EFunction argPat lambdaBody ->
                     let
                         newEnv =
                             unwrapMaybe <| patternMatch environment argPat (interpret environment argument)
                     in
                     interpret newEnv lambdaBody
 
-                Ctor name args ->
-                    Ctor name (args ++ [ interpret environment argument ])
+                ECtor name args ->
+                    ECtor name (args ++ [ interpret environment argument ])
 
                 _ ->
                     Debug.todo "type mismatch; the type checker should've forbidden this"
 
-        Case e [] ->
+        ECase e [] ->
             Debug.todo ("exhaustiveness failure; didn't find a matching pattern for expr " ++ Debug.toString e)
 
-        Case e (( pat, caseBody ) :: otherCases) ->
+        ECase e (( pat, caseBody ) :: otherECases) ->
             case patternMatch environment pat (interpret environment e) of
                 Just newEnv ->
                     interpret newEnv caseBody
 
                 Nothing ->
-                    interpret environment (Case e otherCases)
+                    interpret environment (ECase e otherECases)
 
-        Record body ->
-            Record body
+        ERecord body ->
+            ERecord body
 
 
 patternMatch : Env -> Pattern -> Expr -> Maybe Env
@@ -112,7 +112,7 @@ patternMatch env pat expr =
         ( PVar pvarName, e ) ->
             Just (Dict.insert pvarName e env)
 
-        ( PCtor name1 pats, Ctor name2 exprs ) ->
+        ( PECtor name1 pats, ECtor name2 exprs ) ->
             if name1 /= name2 then
                 Nothing
 
@@ -121,14 +121,14 @@ patternMatch env pat expr =
                     |> Maybe.Extra.combine
                     |> Maybe.map (List.foldl Dict.union env)
 
-        ( PInt a, VInt b ) ->
+        ( PInt a, EInt b ) ->
             if a == b then
                 Just env
 
             else
                 Nothing
 
-        ( PRecord keys, Record body ) ->
+        ( PERecord keys, ERecord body ) ->
             let
                 liftSecondMaybe ( a, b ) =
                     case b of
@@ -157,17 +157,17 @@ patternMatch env pat expr =
 binop : Expr -> Op -> Expr -> Expr
 binop first op second =
     case ( first, op, second ) of
-        ( VInt a, Add, VInt b ) ->
-            VInt (a + b)
+        ( EInt a, OpAdd, EInt b ) ->
+            EInt (a + b)
 
-        ( VInt a, Sub, VInt b ) ->
-            VInt (a - b)
+        ( EInt a, OpSub, EInt b ) ->
+            EInt (a - b)
 
-        ( VInt a, Mul, VInt b ) ->
-            VInt (a * b)
+        ( EInt a, OpMul, EInt b ) ->
+            EInt (a * b)
 
         _ ->
-            Debug.todo <| "type mismatch; expected two `VInt` Expr, got " ++ Debug.toString ( first, op, second )
+            Debug.todo <| "type mismatch; expected two `EInt` Expr, got " ++ Debug.toString ( first, op, second )
 
 
 unwrapMaybe : Maybe a -> a

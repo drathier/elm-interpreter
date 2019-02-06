@@ -17,7 +17,7 @@ patternMatch env pat expr =
         ( PVar pvarName, e ) ->
             Just (Dict.insert pvarName e env)
 
-        ( PCtor name1 pats, Ctor name2 exprs ) ->
+        ( PECtor name1 pats, ECtor name2 exprs ) ->
             if name1 /= name2 then
                 Nothing
 
@@ -26,14 +26,14 @@ patternMatch env pat expr =
                     |> Maybe.Extra.combine
                     |> Maybe.map (List.foldl Dict.union env)
 
-        ( PInt a, VInt b ) ->
+        ( PInt a, EInt b ) ->
             if a == b then
                 Just env
 
             else
                 Nothing
 
-        ( PRecord keys, Record body ) ->
+        ( PERecord keys, ERecord body ) ->
             let
                 liftSecondMaybe ( a, b ) =
                     case b of
@@ -62,13 +62,13 @@ patternMatch env pat expr =
 interpret : Dict Name Expr -> Expr -> Expr
 interpret environment expr =
     case expr of
-        VInt v ->
-            VInt v
+        EInt v ->
+            EInt v
 
-        BinOp e1 op e2 ->
+        EBinOp e1 op e2 ->
             binop (interpret environment e1) op (interpret environment e2)
 
-        Variable var ->
+        EVariable var ->
             case Dict.get var environment of
                 Just varExpr ->
                     interpret environment varExpr
@@ -76,68 +76,68 @@ interpret environment expr =
                 Nothing ->
                     Debug.todo ("unknown variable" ++ Debug.toString var ++ " in env \n" ++ IDebug.printEnv environment)
 
-        Let bindings body ->
+        ELet bindings body ->
             let
                 newEnv =
                     -- shadowing is disallowed in elm, so this union should never collide
                     Dict.union bindings environment
 
-                envWithLetBindings =
+                envWithELetBindings =
                     Dict.map (always (interpret newEnv)) bindings
 
-                inlineFunctions e =
+                inlineEFunctions e =
                     case e of
-                        Function argPat lambdaBody ->
+                        EFunction argPat lambdaBody ->
                             -- if it's a function, we want it to reuse the context it was found in, so it can call the other mutrec fns
-                            Lambda newEnv argPat lambdaBody
+                            ELambda newEnv argPat lambdaBody
 
                         _ ->
                             e
             in
-            interpret (Dict.map (always inlineFunctions) envWithLetBindings) body
+            interpret (Dict.map (always inlineEFunctions) envWithELetBindings) body
 
-        Ctor name args ->
-            Ctor name args
+        ECtor name args ->
+            ECtor name args
 
-        Function argPat lambdaBody ->
-            Lambda environment argPat lambdaBody
+        EFunction argPat lambdaBody ->
+            ELambda environment argPat lambdaBody
 
-        Lambda lambdaEnv argPat lambdaBody ->
-            Lambda lambdaEnv argPat lambdaBody
+        ELambda lambdaEnv argPat lambdaBody ->
+            ELambda lambdaEnv argPat lambdaBody
 
-        Apply fn argument ->
+        EApply fn argument ->
             case interpret environment fn of
-                Lambda lambdaEnv argPat lambdaBody ->
+                ELambda lambdaEnv argPat lambdaBody ->
                     let
                         newEnv =
                             unwrapMaybe <| patternMatch lambdaEnv argPat (interpret environment argument)
                     in
                     interpret newEnv lambdaBody
 
-                Ctor name args ->
-                    Ctor name (args ++ [ interpret environment argument ])
+                ECtor name args ->
+                    ECtor name (args ++ [ interpret environment argument ])
 
                 _ ->
                     Debug.todo "type mismatch; the type checker should've forbidden this"
 
-        Case e [] ->
+        ECase e [] ->
             Debug.todo ("exhaustiveness failure; didn't find a matching pattern for expr " ++ Debug.toString e)
 
-        Case e (( pat, caseBody ) :: otherCases) ->
+        ECase e (( pat, caseBody ) :: otherECases) ->
             case patternMatch environment pat (interpret environment e) of
                 Just newEnv ->
                     interpret newEnv caseBody
 
                 Nothing ->
-                    interpret environment (Case e otherCases)
+                    interpret environment (ECase e otherECases)
 
-        Record body ->
-            Record body
+        ERecord body ->
+            ERecord body
 
-        Negate e ->
+        ENegate e ->
             case interpret environment e of
-                VInt i ->
-                    VInt -i
+                EInt i ->
+                    EInt -i
 
-                nonValueExpr ->
-                    Negate nonValueExpr
+                nonEIntExpr ->
+                    ENegate nonEIntExpr

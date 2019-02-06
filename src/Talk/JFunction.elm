@@ -1,4 +1,4 @@
-module Talk.JFunction exposing (Env, Expr(..), Name, Op(..), binop, interpret)
+module Talk.JEFunction exposing (Env, Expr(..), Name, Op(..), binop, interpret)
 
 import Dict exposing (Dict)
 
@@ -8,9 +8,9 @@ type alias Env =
 
 
 type Op
-    = Add
-    | Mul
-    | Sub
+    = OpAdd
+    | OpMul
+    | OpSub
 
 
 type alias Name =
@@ -18,23 +18,23 @@ type alias Name =
 
 
 type Expr
-    = VInt Int
-    | BinOp Expr Op Expr
-    | Variable Name
-    | Let ( Name, Expr ) Expr
-    | Function Name Expr
+    = EInt Int
+    | EBinOp Expr Op Expr
+    | EVariable Name
+    | ELet ( Name, Expr ) Expr
+    | EFunction Name Expr
 
 
 interpret : Dict Name Expr -> Expr -> Expr
 interpret environment expr =
     case expr of
-        VInt v ->
-            VInt v
+        EInt v ->
+            EInt v
 
-        BinOp e1 op e2 ->
+        EBinOp e1 op e2 ->
             binop (interpret environment e1) op (interpret environment e2)
 
-        Variable var ->
+        EVariable var ->
             case Dict.get var environment of
                 Just varExpr ->
                     interpret environment varExpr
@@ -42,28 +42,28 @@ interpret environment expr =
                 Nothing ->
                     Debug.todo ("unknown variable" ++ Debug.toString var ++ " in env \n" ++ Debug.toString environment)
 
-        Let ( varName, varBody ) body ->
+        ELet ( varName, varBody ) body ->
             let
-                envWithLetBindings =
+                envWithELetBindings =
                     Dict.insert varName varBody environment
             in
-            interpret envWithLetBindings body
+            interpret envWithELetBindings body
 
-        Function argName lambdaBody ->
-            Function argName lambdaBody
+        EFunction argName lambdaBody ->
+            EFunction argName lambdaBody
 
 
 binop : Expr -> Op -> Expr -> Expr
 binop first op second =
     case ( first, op, second ) of
-        ( VInt a, Add, VInt b ) ->
-            VInt (a + b)
+        ( EInt a, OpAdd, EInt b ) ->
+            EInt (a + b)
 
-        ( VInt a, Sub, VInt b ) ->
-            VInt (a - b)
+        ( EInt a, OpSub, EInt b ) ->
+            EInt (a - b)
 
-        ( VInt a, Mul, VInt b ) ->
-            VInt (a * b)
+        ( EInt a, OpMul, EInt b ) ->
+            EInt (a * b)
 
         _ ->
-            Debug.todo <| "type mismatch; expected two `VInt` Expr, got " ++ Debug.toString ( first, op, second )
+            Debug.todo <| "type mismatch; expected two `EInt` Expr, got " ++ Debug.toString ( first, op, second )

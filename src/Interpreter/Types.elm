@@ -8,9 +8,9 @@ type alias Env =
 
 
 type Op
-    = Add
-    | Mul
-    | Sub
+    = OpAdd
+    | OpMul
+    | OpSub
 
 
 type alias Name =
@@ -18,22 +18,22 @@ type alias Name =
 
 
 type Expr
-    = VInt Int
-    | BinOp Expr Op Expr
-    | Variable Name
-    | Let (Dict Name Expr) Expr
-    | Function Pattern Expr
-    | Lambda Env Pattern Expr
-    | Apply Expr Expr -- fn arg
-    | Ctor Name (List Expr)
-    | Case Expr (List ( Pattern, Expr ))
-    | Record (Dict Name Expr)
-    | Negate Expr
+    = EInt Int
+    | EBinOp Expr Op Expr
+    | EVariable Name
+    | ELet (Dict Name Expr) Expr
+    | EFunction Pattern Expr
+    | ELambda Env Pattern Expr
+    | EApply Expr Expr -- fn arg
+    | ECtor Name (List Expr)
+    | ECase Expr (List ( Pattern, Expr ))
+    | ERecord (Dict Name Expr)
+    | ENegate Expr
 
 
 type Pattern
     = PAnything
     | PVar Name
     | PInt Int
-    | PCtor Name (List Pattern)
-    | PRecord (Set Name)
+    | PECtor Name (List Pattern)
+    | PERecord (Set Name)
